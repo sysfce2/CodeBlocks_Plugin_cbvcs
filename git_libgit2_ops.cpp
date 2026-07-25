@@ -271,7 +271,6 @@ void LibGit2UpdateFullOp::UpdateStates()
  ***********************************************************************/
 void LibGit2AddOp::ExecuteImplementation(std::vector<std::shared_ptr<VcsTreeItem>> pathList)
 {
-    wxString pathString;
     GitRepoIndex gitRepoIndex(m_VcsRootDir);
     if (!gitRepoIndex.m_idx)
     {
