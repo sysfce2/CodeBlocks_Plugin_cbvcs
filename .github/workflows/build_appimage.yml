@@ -1,0 +1,102 @@
+name: Build AppImage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-22.04
+
+    env:
+      APPDIR: AppDir
+      CB_VERSION: r13916
+      CB_RELEASE: svn13916
+
+    steps:
+    - name: Checkout Code::Blocks
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+
+        sudo apt-get install -y \
+          build-essential \
+          autoconf \
+          automake \
+          libtool \
+          pkg-config \
+          git \
+          zip \
+          unzip \
+          gettext \
+          libgtk-3-dev \
+          libzstd-dev \
+          wget
+
+    - name: Add app name to env
+      run: |
+        echo "ORIGINAL_APPNAME=CodeBlocks-${{ env.CB_VERSION }}-x86_64.AppImage" >> $GITHUB_ENV
+        echo "APPNAME=CodeBlocks-${{ env.CB_VERSION }}-cbvcs-x86_64.AppImage" >> $GITHUB_ENV
+
+    - name: CodeBlocks
+      run: |
+        wget https://github.com/josephch/codeblocks/releases/download/${CB_RELEASE}/${ORIGINAL_APPNAME}
+        chmod +x ${ORIGINAL_APPNAME}
+        ./${ORIGINAL_APPNAME} --appimage-extract
+        mv squashfs-root ${APPDIR}
+        echo "AppDir setup at ${PWD}/${APPDIR}"
+
+
+    - name: Checkout libgit2
+      run: |
+        git clone --depth=1 --branch v1.9.4 \
+          https://github.com/libgit2/libgit2.git
+
+
+    - name: Build libgit2
+      run: |
+        cd libgit2
+        mkdir build-libgit2
+        cd build-libgit2
+        cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=/usr ..
+        cmake --build . -j
+        sudo cmake --install .
+
+
+    - name: Build cbvcs
+      run: |
+        export PKG_CONFIG_PATH=$PWD/${APPDIR}/lib/pkgconfig
+        echo "ls $PKG_CONFIG_PATH"
+        ls $PKG_CONFIG_PATH
+        mkdir build-cbvcs
+        cd build-cbvcs
+        cmake ..
+        cmake --build . -j
+
+    - name: Install cbvcs to AppDir
+      run: |
+        cp cbvcs.so ${APPDIR}/lib/codeblocks/plugins/
+        cp cbvcs.zip ${APPDIR}/share/codeblocks
+
+    - name: Download appimagetool
+      run: |
+        wget -O appimagetool.AppImage \
+          https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+
+        chmod +x appimagetool.AppImage
+
+    - name: Build AppImage
+      run: |
+        ARCH=x86_64 \
+        ./appimagetool.AppImage \
+          ${APPDIR} \
+          ${APPNAME}
+
+    - name: Upload AppImage
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.APPNAME }}
+        path: ${{ env.APPNAME }}
+        archive: false
+
